@@ -95,7 +95,7 @@ static uint32_t _closed_index = []() {
 
 static inline bool _init_async_event_queue(){
     if(!_async_queue){
-        _async_queue = xQueueCreate(32, sizeof(lwip_event_packet_t *));
+        _async_queue = xQueueCreate(256, sizeof(lwip_event_packet_t *));
         if(!_async_queue){
             return false;
         }
@@ -104,7 +104,8 @@ static inline bool _init_async_event_queue(){
 }
 
 static inline bool _send_async_event(lwip_event_packet_t ** e){
-    return _async_queue && xQueueSend(_async_queue, e, portMAX_DELAY) == pdPASS;
+    //return _async_queue && xQueueSend(_async_queue, e, portMAX_DELAY) == pdPASS;
+    return _async_queue && xQueueSend(_async_queue, e, (TickType_t) 0x64) == pdPASS;
 }
 
 static inline bool _prepend_async_event(lwip_event_packet_t ** e){
@@ -232,10 +233,13 @@ static bool _start_async_task(){
 
 static int8_t _tcp_clear_events(void * arg) {
     lwip_event_packet_t * e = (lwip_event_packet_t *)malloc(sizeof(lwip_event_packet_t));
-    e->event = LWIP_TCP_CLEAR;
-    e->arg = arg;
-    if (!_prepend_async_event(&e)) {
-        free((void*)(e));
+    //copied from BlueAndi repo
+    if (NULL != e) {
+        e->event = LWIP_TCP_CLEAR;
+        e->arg = arg;
+        if (!_prepend_async_event(&e)) {
+            free((void*)(e));
+        }
     }
     return ERR_OK;
 }
@@ -700,7 +704,11 @@ bool AsyncClient::connect(IPAddress ip, uint16_t port){
     tcp_sent(pcb, &_tcp_sent);
     tcp_poll(pcb, &_tcp_poll, 1);
     //_tcp_connect(pcb, &addr, port,(tcp_connected_fn)&_s_connected);
-    _tcp_connect(pcb, _closed_slot, &addr, port,(tcp_connected_fn)&_tcp_connected);
+    //Copied from BlueAndi repo 
+    if (ESP_OK != _tcp_connect(pcb, _closed_slot, &addr, port,(tcp_connected_fn)&_tcp_connected))
+    {
+        return false;
+    }
     return true;
 }
 
